@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DPE Export OPAL</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- SheetJS est déjà chargé via xlsx.full.min.js, il gère aussi les .xls via xlrd interne -->
+<style>
+  :root {
+    --blue-50: #E6F1FB; --blue-100: #B5D4F4; --blue-600: #185FA5; --blue-800: #0C447C;
+    --teal-50: #E1F5EE; --teal-600: #0F6E56; --teal-800: #085041;
+    --amber-50: #FAEEDA; --amber-600: #854F0B; --amber-800: #633806;
+    --gray-50: #F1EFE8; --gray-100: #D3D1C7; --gray-400: #888780; --gray-600: #5F5E5A;
+    --green-50: #EAF3DE; --green-600: #3B6D11; --green-800: #27500A;
+    --red-50: #FCEBEB; --red-600: #A32D2D;
+    --font: 'Segoe UI', system-ui, sans-serif;
+    --radius: 8px; --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: #f5f4f0; color: #1a1a1a; font-size: 14px; }
+  
+  .app { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  
+  .header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--gray-100); }
+  .header-logo { width: 44px; height: 44px; background: var(--blue-600); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 15px; flex-shrink: 0; }
+  .header h1 { font-size: 20px; font-weight: 600; color: #111; }
+  .header p { font-size: 13px; color: var(--gray-600); margin-top: 2px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  
+  .card { background: white; border-radius: var(--radius-lg); border: 1px solid var(--gray-100); padding: 20px; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--gray-600); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .card-title .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot-blue { background: var(--blue-600); }
+  .dot-amber { background: #EF9F27; }
+  .dot-green { background: #639922; }
+  .dot-teal { background: var(--teal-600); }
+
+  .drop-zone { border: 1.5px dashed var(--gray-100); border-radius: var(--radius); padding: 20px 16px; text-align: center; cursor: pointer; transition: all 0.15s; background: var(--gray-50); }
+  .drop-zone:hover, .drop-zone.drag { border-color: var(--blue-600); background: var(--blue-50); }
+  .drop-zone.loaded { border-color: #639922; background: var(--green-50); border-style: solid; }
+  .drop-zone svg { width: 28px; height: 28px; margin-bottom: 8px; }
+  .drop-zone p { font-size: 13px; color: var(--gray-600); }
+  .drop-zone p strong { color: #111; }
+  .drop-zone .file-name { font-size: 12px; color: var(--green-600); font-weight: 600; margin-top: 4px; }
+  .drop-zone input[type="file"] { display: none; }
+
+  .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input, .field select { font-family: var(--font); font-size: 13px; padding: 7px 10px; border: 1px solid var(--gray-100); border-radius: var(--radius); background: white; color: #111; outline: none; transition: border-color 0.1s; width: 100%; }
+  .field input:focus, .field select:focus { border-color: var(--blue-600); }
+  .field input.auto-filled { background: var(--blue-50); border-color: var(--blue-100); color: var(--blue-800); }
+  .field input.opal-field { background: var(--amber-50); border-color: #FAC775; color: var(--amber-800); }
+  .field input[readonly].auto-filled { cursor: default; }
+
+  .badge-auto { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--blue-50); color: var(--blue-800); font-weight: 600; display: inline-block; margin-left: 4px; vertical-align: middle; }
+  .badge-opal { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--amber-50); color: var(--amber-800); font-weight: 600; display: inline-block; margin-left: 4px; vertical-align: middle; }
+  .badge-man { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: var(--teal-50); color: var(--teal-800); font-weight: 600; display: inline-block; margin-left: 4px; vertical-align: middle; }
+
+  .section-sep { margin: 16px 0 12px; border-top: 1px solid var(--gray-50); padding-top: 12px; }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--gray-400); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; }
+
+  .preview-wrap { overflow-x: auto; border: 1px solid var(--gray-100); border-radius: var(--radius); }
+  .preview-table { border-collapse: collapse; font-size: 11px; white-space: nowrap; min-width: 100%; }
+  .preview-table td { padding: 6px 8px; border-right: 1px solid var(--gray-50); border-bottom: 1px solid var(--gray-50); max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .preview-table tr:last-child td { border-bottom: none; }
+  .preview-table .col-num { font-size: 10px; color: var(--gray-400); background: var(--gray-50); text-align: center; padding: 4px 6px; border-bottom: 1px solid var(--gray-100); font-weight: 600; }
+  .cell-auto { background: #EFF6FF; color: var(--blue-800); }
+  .cell-opal { background: var(--amber-50); color: var(--amber-800); }
+  .cell-man { background: var(--teal-50); color: var(--teal-800); }
+  .cell-empty { color: var(--gray-400); font-style: italic; }
+
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--gray-600); }
+  .leg-swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+  button { font-family: var(--font); font-size: 13px; font-weight: 500; padding: 9px 18px; border-radius: var(--radius); cursor: pointer; border: 1px solid; transition: all 0.12s; display: flex; align-items: center; gap: 7px; }
+  .btn-primary { background: var(--blue-600); color: white; border-color: var(--blue-600); }
+  .btn-primary:hover { background: var(--blue-800); border-color: var(--blue-800); }
+  .btn-secondary { background: white; color: #111; border-color: var(--gray-100); }
+  .btn-secondary:hover { background: var(--gray-50); }
+  .btn-green { background: var(--green-600); color: white; border-color: var(--green-600); }
+  .btn-green:hover { background: var(--green-800); border-color: var(--green-800); }
+  .btn-amber { background: #854F0B; color: white; border-color: #854F0B; }
+  .btn-amber:hover { background: var(--amber-800); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button svg { width: 15px; height: 15px; flex-shrink: 0; }
+
+  .status-bar { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-top: 14px; display: none; }
+  .status-ok { background: var(--green-50); color: var(--green-800); border: 1px solid #C0DD97; display: flex; align-items: center; gap: 8px; }
+  .status-err { background: var(--red-50); color: var(--red-600); border: 1px solid #F7C1C1; display: flex; align-items: center; gap: 8px; }
+  .status-info { background: var(--blue-50); color: var(--blue-800); border: 1px solid var(--blue-100); display: flex; align-items: center; gap: 8px; }
+
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  .stat { background: var(--gray-50); border-radius: var(--radius); padding: 12px 14px; }
+  .stat .v { font-size: 22px; font-weight: 600; color: #111; }
+  .stat .l { font-size: 11px; color: var(--gray-600); margin-top: 2px; }
+  .stat.blue { background: var(--blue-50); } .stat.blue .v { color: var(--blue-800); }
+  .stat.green { background: var(--green-50); } .stat.green .v { color: var(--green-800); }
+  .stat.amber { background: var(--amber-50); } .stat.amber .v { color: var(--amber-800); }
+
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } .stats-row { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-logo">DPE</div>
+    <div>
+      <h1>Export DPE — OPAL</h1>
+      <p>Extraction automatique XML + PDF · Génération fichier retour CCTP</p>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+      <span style="font-size:11px; padding:3px 8px; border-radius:4px; background:var(--blue-50); color:var(--blue-800); font-weight:600;">SOCOTEC Diagnostic</span>
+    </div>
+  </div>
+
+  <div class="stats-row" id="statsRow">
+    <div class="stat"><div class="v" id="statChamps">—</div><div class="l">Champs remplis</div></div>
+    <div class="stat blue"><div class="v" id="statAuto">—</div><div class="l">Extraits automatiquement</div></div>
+    <div class="stat amber"><div class="v" id="statOpal">—</div><div class="l">À renseigner (OPAL)</div></div>
+    <div class="stat green"><div class="v" id="statPret">—%</div><div class="l">Taux de complétion</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-blue"></span>Fichiers source</div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+
+        <div class="drop-zone" id="dropXls" onclick="document.getElementById('fileXls').click()" style="border-color:#FAC775; background:var(--amber-50);">
+          <input type="file" id="fileXls" accept=".xls,.xlsx" onchange="loadXls(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#854F0B"><path d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p><strong>Glissez le fichier XLS OPAL</strong></p>
+          <p>Renseigne automatiquement Col.1, 2, 9 et 100</p>
+          <div class="file-name" id="xlsName" style="display:none; color:var(--amber-600);"></div>
+        </div>
+
+        <div class="drop-zone" id="dropXml" onclick="document.getElementById('fileXml').click()">
+          <input type="file" id="fileXml" accept=".xml" onchange="loadXml(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--blue-600)"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <p><strong>Glissez le fichier XML ADEME</strong></p>
+          <p>ou cliquez pour sélectionner</p>
+          <div class="file-name" id="xmlName" style="display:none"></div>
+        </div>
+
+        <div class="drop-zone" id="dropPdf" onclick="document.getElementById('filePdf').click()">
+          <input type="file" id="filePdf" accept=".pdf" onchange="loadPdf(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#D85A30"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          <p><strong>Glissez le rapport PDF</strong></p>
+          <p>pour compléter N° DPE, validité, frais</p>
+          <div class="file-name" id="pdfName" style="display:none"></div>
+        </div>
+
+      </div>
+      <div class="status-bar" id="statusImport"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span class="dot dot-amber"></span>Données OPAL <span class="badge-opal">saisie obligatoire</span></div>
+      <div class="fields-grid">
+        <div class="field">
+          <label>Col.1 — Organisme</label>
+          <input type="text" id="f1" class="opal-field" placeholder="Ex: 1" value="1">
+        </div>
+        <div class="field">
+          <label>Col.2 — Agence</label>
+          <input type="text" id="f2" class="opal-field" placeholder="Ex: OPAL02">
+        </div>
+        <div class="field">
+          <label>Col.100 — Identifiant unique</label>
+          <input type="text" id="f100" class="opal-field" placeholder="ID OPAL unique">
+        </div>
+        <div class="field">
+          <label>Col.9 — N° Local</label>
+          <input type="text" id="f9" class="opal-field" placeholder="Renseigné par OPAL">
+        </div>
+      </div>
+
+      <div class="section-sep">
+        <div class="section-label">Données à compléter / vérifier <span class="badge-man">manuel si absent du fichier</span></div>
+      </div>
+      <div class="fields-grid">
+        <div class="field">
+          <label>Col.18 — N° DPE (ADEME)</label>
+          <input type="text" id="f18" placeholder="Ex: 2559E3512532V">
+        </div>
+        <div class="field">
+          <label>Col.16 — Valable jusqu'au</label>
+          <input type="text" id="f16" placeholder="JJ/MM/AAAA">
+        </div>
+        <div class="field">
+          <label>Col.22 — Année index prix</label>
+          <input type="text" id="f22" placeholder="Ex: 2021-2023" value="2021-2023">
+        </div>
+        <div class="field">
+          <label>Col.64 — Année de référence</label>
+          <input type="text" id="f64" placeholder="Ex: 2023" value="2023">
+        </div>
+        <div class="field">
+          <label>Col.62 — Frais chauf. min (€)</label>
+          <input type="number" id="f62" placeholder="Ex: 320">
+        </div>
+        <div class="field">
+          <label>Col.63 — Frais chauf. max (€)</label>
+          <input type="number" id="f63" placeholder="Ex: 450">
+        </div>
+        <div class="field">
+          <label>Col.61 — Nom PDF joint</label>
+          <input type="text" id="f61" placeholder="Calculé depuis le N° Local" readonly style="cursor:default; color:var(--gray-600); font-style:italic;">
+        </div>
+        <div class="field">
+          <label>Col.10 — Type construction</label>
+          <select id="f10">
+            <option value="">— Sélectionner —</option>
+            <option value="Avant 1948">Avant 1948</option>
+            <option value="1948-1974" selected>1948-1974</option>
+            <option value="1975-1981">1975-1981</option>
+            <option value="1982-1989">1982-1989</option>
+            <option value="1990-2000">1990-2000</option>
+            <option value="2001-2005">2001-2005</option>
+            <option value="2006-2012">2006-2012</option>
+            <option value="Après 2012">Après 2012</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-title"><span class="dot dot-green"></span>Aperçu du tableau OPAL</div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-swatch" style="background:#EFF6FF; border:1px solid var(--blue-100);"></div>Extrait XML automatiquement</div>
+      <div class="leg-item"><div class="leg-swatch" style="background:var(--amber-50); border:1px solid #FAC775;"></div>Champ OPAL (éditable)</div>
+      <div class="leg-item"><div class="leg-swatch" style="background:var(--teal-50); border:1px solid #9FE1CB;"></div>Saisie manuelle</div>
+      <div class="leg-item"><div class="leg-swatch" style="background:#f8f8f8; border:1px solid var(--gray-100);"></div>Vide / non applicable</div>
+    </div>
+    <div class="preview-wrap">
+      <table class="preview-table" id="previewTable">
+        <tr id="colNums"></tr>
+        <tr id="dataRow"></tr>
+      </table>
+    </div>
+    <div class="status-bar" id="statusPrev"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-green" id="btnXlsx" onclick="exportXlsx()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Exporter Excel (.xlsx)
+    </button>
+    <button class="btn-amber" id="btnPdfRename" onclick="renamePdf()" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+      Télécharger PDF renommé
+    </button>
+    <button class="btn-secondary" onclick="refreshPreview()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      Actualiser l'aperçu
+    </button>
+  </div>
+  <div class="status-bar" id="statusExport"></div>
+</div>
+
+<script>
+let xmlData = {};
+let pdfData = {};
+let pdfFileRaw = null;
+
+function loadXls(input) {
+  const file = input.files[0];
+  if (!file) return;
+  showStatus('statusImport', 'info', 'Lecture du fichier XLS OPAL...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      if (!rows || rows.length === 0) {
+        showStatus('statusImport', 'err', 'Fichier XLS vide ou illisible.');
+        return;
+      }
+
+      const row = rows[0];
+
+      const val1   = row[0]  !== undefined ? String(row[0]).trim()  : '';
+      const val2   = row[1]  !== undefined ? String(row[1]).trim()  : '';
+      const val9   = row[8]  !== undefined ? String(row[8]).trim()  : '';
+      const val100 = row[99] !== undefined ? String(row[99]).trim() : '';
+
+      if (val1)   { document.getElementById('f1').value   = val1;   document.getElementById('f1').classList.add('auto-filled');   }
+      if (val2)   { document.getElementById('f2').value   = val2;   document.getElementById('f2').classList.add('auto-filled');   }
+      if (val9)   { document.getElementById('f9').value   = val9;   document.getElementById('f9').classList.add('auto-filled');   }
+      if (val100) { document.getElementById('f100').value = val100; document.getElementById('f100').classList.add('auto-filled'); }
+
+      const found = [];
+      if (val1)   found.push('Col.1 Organisme : ' + val1);
+      if (val2)   found.push('Col.2 Agence : ' + val2);
+      if (val9)   found.push('Col.9 N° Local : ' + val9);
+      if (val100) found.push('Col.100 ID unique : ' + val100);
+
+      document.getElementById('xlsName').textContent = file.name;
+      document.getElementById('xlsName').style.display = 'block';
+      document.getElementById('dropXls').classList.add('loaded');
+
+      syncPdfName();
+      showStatus('statusImport', 'ok', 'XLS OPAL lu — ' + (found.length ? found.join(' · ') : 'aucune valeur trouvée aux colonnes attendues'));
+      refreshPreview();
+      updateStats();
+    } catch(err) {
+      showStatus('statusImport', 'err', 'Erreur lecture XLS : ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+const COLUMNS = [
+  {n:1,k:'f1',src:'opal'},{n:2,k:'f2',src:'opal'},
+  {n:3,k:'c3',src:'xml',label:'Commune'},
+  {n:4,k:'c4',src:'xml',label:'Rue'},
+  {n:5,k:'c5',src:'xml',label:'Adresse'},
+  {n:6,k:'c6',src:'xml',label:'N° Bâtiment'},
+  {n:7,k:'c7',src:'xml',label:'Entrée'},
+  {n:8,k:'c8',src:'xml',label:'Appartement'},
+  {n:9,k:'f9',src:'opal',label:'N° Local'},
+  {n:10,k:'f10',src:'manual',label:'Type construction'},
+  {n:11,k:'c11',src:'xml',label:'Etage'},
+  {n:12,k:'c12',src:'xml',label:'Type logt'},
+  {n:13,k:'c13',src:'xml',label:'Année construction'},
+  {n:14,k:'c14',src:'xml',label:'Surface Habitable'},
+  {n:15,k:'c15',src:'xml',label:'Surface Chauffée'},
+  {n:16,k:'f16',src:'manual',label:'Valable jusqu\'au'},
+  {n:17,k:'c17',src:'xml',label:'Date visite'},
+  {n:18,k:'f18',src:'manual',label:'N° DPE'},
+  {n:19,k:'c19',src:'xml',label:'Date du diag'},
+  {n:20,k:'c20',src:'xml',label:'Méthode calcul'},
+  {n:21,k:'c21',src:'xml',label:'Logiciel'},
+  {n:22,k:'f22',src:'manual',label:'Date index prix'},
+  {n:23,k:'c23',src:'xml',label:'Diagnostiqueur'},
+  {n:24,k:'c24',src:'xml',label:'CEF chauffage'},
+  {n:25,k:'c25',src:'xml',label:'CEP chauffage'},
+  {n:26,k:'c26',src:'xml',label:'Frais chauf.'},
+  {n:27,k:'c27',src:'xml',label:'CEF Eau'},
+  {n:28,k:'c28',src:'xml',label:'CEP Eau'},
+  {n:29,k:'c29',src:'xml',label:'Frais eau'},
+  {n:30,k:'c30',src:'xml',label:'CEF froid'},
+  {n:31,k:'c31',src:'xml',label:'CEP froid'},
+  {n:32,k:'c32',src:'xml',label:'Frais froid'},
+  {n:33,k:'c33',src:'xml',label:'Conso EF tot.'},
+  {n:34,k:'c34',src:'xml',label:'Conso EP tot.'},
+  {n:35,k:'c35',src:'xml',label:'Frais total'},
+  {n:36,k:'c36',src:'xml',label:'Conso conv.'},
+  {n:37,k:'c37',src:'xml',label:'Etiquette énergie'},
+  {n:38,k:'c38',src:'xml',label:'Emissions GES'},
+  {n:39,k:'c39',src:'xml',label:'Etiquette GES'},
+  {n:40,k:'c40',src:'xml',label:'Murs'},
+  {n:41,k:'c41',src:'xml',label:'Menuiseries'},
+  {n:42,k:'c42',src:'xml',label:'Sys. chauffage'},
+  {n:43,k:'c43',src:'xml',label:'Sys. ECS'},
+  {n:44,k:'c44',src:'xml',label:'Emetteur'},
+  {n:45,k:'c45',src:'xml',label:'Toiture'},
+  {n:46,k:'c46',src:'xml',label:'Plancher bas'},
+  {n:47,k:'c47',src:'xml',label:'ENR'},
+  {n:48,k:'c48',src:'xml',label:'Qté ENR'},
+  {n:49,k:'c49',src:'xml',label:'Type ENR'},
+  {n:50,k:'c50',src:'xml',label:'Recomm. 1'},
+  {n:51,k:'c51',src:'xml',label:'Commentaire 1'},
+  {n:52,k:'c52',src:'xml',label:'Recomm. 2'},
+  {n:53,k:'c53',src:'xml',label:'Commentaire 2'},
+  {n:54,k:'c54',src:'xml',label:'Comment. général'},
+  {n:55,k:'c55',src:'xml',label:'Recomm. 3'},
+  {n:56,k:'c56',src:'xml',label:'Commentaire 3'},
+  {n:57,k:'c57',src:'xml',label:'Recomm. 4'},
+  {n:58,k:'c58',src:'xml',label:'Recomm. 5'},
+  {n:59,k:'c59',src:'xml',label:'Recomm. 6'},
+  {n:60,k:'c60',src:'xml',label:'Recomm. 7'},
+  {n:61,k:'f61',src:'manual',label:'Nom PDF'},
+  {n:62,k:'f62',src:'manual',label:'Frais chauf. min'},
+  {n:63,k:'f63',src:'manual',label:'Frais chauf. max'},
+  {n:64,k:'f64',src:'manual',label:'Année référence'},
+  {n:65,k:'c65',src:'xml',label:'EF annuelle'},
+  {n:100,k:'f100',src:'opal'},
+];
+
+function getXmlVal(doc, tag, idx=0) {
+  const els = doc.getElementsByTagName(tag);
+  return els[idx] && els[idx].textContent ? els[idx].textContent.trim() : '';
+}
+
+function getDescriptif(doc, cat) {
+  const items = doc.getElementsByTagName('descriptif_simplifie');
+  for (let i = 0; i < items.length; i++) {
+    const catEl = items[i].getElementsByTagName('enum_categorie_descriptif_simplifie_id')[0];
+    const descEl = items[i].getElementsByTagName('description')[0];
+    if (catEl && descEl && catEl.textContent.trim() === String(cat)) {
+      return descEl.textContent.trim();
+    }
+  }
+  return '';
+}
+
+function getWorkDescriptions(doc) {
+  const result = [];
+  const els = doc.getElementsByTagName('description_travaux');
+  for (let i = 0; i < els.length; i++) {
+    if (els[i].textContent.trim()) result.push(els[i].textContent.trim());
+  }
+  return result;
+}
+
+function roundNum(v, dec=0) {
+  if (v === '' || v === null || v === undefined) return '';
+  const n = parseFloat(v);
+  if (isNaN(n)) return v;
+  return dec === 0 ? Math.round(n) : n.toFixed(dec);
+}
+
+function loadXml(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(e.target.result, 'text/xml');
+      
+      const adresse = getXmlVal(doc, 'adresse_brut');
+      const rue = getXmlVal(doc, 'ban_street');
+      const ville = getXmlVal(doc, 'ban_city');
+      const cp = getXmlVal(doc, 'ban_postcode');
+      const num = getXmlVal(doc, 'ban_housenumber');
+      const etage = getXmlVal(doc, 'compl_etage_appartement');
+      const ref = getXmlVal(doc, 'compl_ref_batiment');
+      const refLogement = getXmlVal(doc, 'compl_ref_logement');
+      const refCage = getXmlVal(doc, 'compl_ref_cage_escalier');
+      const surf = getXmlVal(doc, 'surface_habitable_logement');
+      const surfCh = getXmlVal(doc, 'surface_chauffee');
+      const dateVisite = getXmlVal(doc, 'date_visite_diagnostiqueur');
+      const dateDiag = getXmlVal(doc, 'date_etablissement_dpe');
+      const nomDiag = getXmlVal(doc, 'nom_diagnostiqueur');
+      const prenomDiag = getXmlVal(doc, 'prenom_diagnostiqueur');
+      const logiciel = getXmlVal(doc, 'version_logiciel');
+      const methode = getXmlVal(doc, 'enum_methode_application_dpe_log_id');
+      const consoEF = getXmlVal(doc, 'conso_5_usages');
+      const consoEP = getXmlVal(doc, 'ep_conso_5_usages');
+      const conso_m2 = getXmlVal(doc, 'conso_5_usages_m2');
+      const ep_m2 = getXmlVal(doc, 'ep_conso_5_usages_m2');
+      const classBilan = getXmlVal(doc, 'classe_bilan_dpe');
+      const classGES = getXmlVal(doc, 'classe_emission_ges');
+      const ges_m2 = getXmlVal(doc, 'emission_ges_5_usages_m2');
+      const conso_ch = getXmlVal(doc, 'conso_ch');
+      const ep_ch = getXmlVal(doc, 'ep_conso_ch');
+      const cout_ch = getXmlVal(doc, 'cout_ch');
+      const conso_ecs = getXmlVal(doc, 'conso_ecs');
+      const ep_ecs = getXmlVal(doc, 'ep_conso_ecs');
+      const cout_ecs = getXmlVal(doc, 'cout_ecs');
+      const conso_fr = getXmlVal(doc, 'conso_fr');
+      const ep_fr = getXmlVal(doc, 'ep_conso_fr');
+      const cout_fr = getXmlVal(doc, 'cout_fr');
+      const cout_tot = getXmlVal(doc, 'cout_5_usages');
+      const periode = getXmlVal(doc, 'enum_periode_construction_id');
+      const methode_dpe = methode === '2' ? '3CL-DPE 2021' : methode;
+      
+      const travaux = getWorkDescriptions(doc);
+
+      xmlData = {
+        c3: ville, c4: rue, c5: adresse, c6: num,
+        c7: refCage, c8: refLogement, f9: ref,
+        c11: etage, c12: 'Appartement',
+        c13: periodeLabel(periode),
+        c14: roundNum(surf), c15: roundNum(surfCh),
+        c17: formatDate(dateVisite), c19: formatDate(dateDiag),
+        c20: methode_dpe, c21: logiciel,
+        c23: (prenomDiag + ' ' + nomDiag).trim(),
+        c24: roundNum(conso_ch), c25: roundNum(ep_ch), c26: roundNum(cout_ch, 2),
+        c27: roundNum(conso_ecs), c28: roundNum(ep_ecs), c29: roundNum(cout_ecs, 2),
+        c30: roundNum(conso_fr), c31: roundNum(ep_fr), c32: roundNum(cout_fr, 2),
+        c33: roundNum(consoEF), c34: roundNum(consoEP), c35: roundNum(cout_tot, 2),
+        c36: conso_m2, c37: classBilan, c38: ges_m2, c39: classGES,
+        c40: getDescriptif(doc, 1),
+        c41: getDescriptif(doc, 4),
+        c42: getDescriptif(doc, 5),
+        c43: getDescriptif(doc, 9),
+        c44: '',
+        c45: getDescriptif(doc, 2),
+        c46: getDescriptif(doc, 3),
+        c47: '', c48: '', c49: '',
+        c50: travaux[0] || '', c51: '',
+        c52: travaux[1] || '', c53: '',
+        c54: '',
+        c55: travaux[2] || '', c56: '',
+        c57: travaux[3] || '', c58: travaux[4] || '',
+        c59: travaux[5] || '', c60: travaux[6] || '',
+        c65: roundNum(consoEF),
+      };
+
+      const pdfName = ref.replace(/\s/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') + '.pdf';
+      xmlData.pdfName = pdfName;
+
+      applyXmlToForm();
+      showStatus('statusImport', 'ok', 'XML chargé avec succès — ' + Object.values(xmlData).filter(v=>v).length + ' champs extraits');
+      document.getElementById('xmlName').textContent = file.name;
+      document.getElementById('xmlName').style.display = 'block';
+      document.getElementById('dropXml').classList.add('loaded');
+      refreshPreview();
+      updateStats();
+      enableButtons();
+    } catch(err) {
+      showStatus('statusImport', 'err', 'Erreur lecture XML : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function loadPdf(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pdfFileRaw = file;
+
+  showStatus('statusImport', 'info', 'Lecture du PDF en cours...');
+
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      fullText += content.items.map(item => item.str).join(' ') + '\n';
+    }
+
+    const found = [];
+
+    const numDpeMatch = fullText.match(/n[°o]\s*:\s*([0-9]{4}[A-Z][0-9]{7,10}[A-Z])/i)
+      || fullText.match(/([0-9]{4}[A-Z][0-9]{7,10}[A-Z])/);
+    if (numDpeMatch) {
+      const val = numDpeMatch[1].trim();
+      document.getElementById('f18').value = val;
+      document.getElementById('f18').classList.add('auto-filled');
+      found.push('N° DPE : ' + val);
+    }
+
+    const validiteMatch = fullText.match(/[Vv]alable jusqu.au\s*:\s*(\d{2}\/\d{2}\/\d{4})/);
+    if (validiteMatch) {
+      document.getElementById('f16').value = validiteMatch[1];
+      document.getElementById('f16').classList.add('auto-filled');
+      found.push('Valable jusqu\'au : ' + validiteMatch[1]);
+    }
+
+    const etabliMatch = fullText.match(/[Ee]tabli le\s*:\s*(\d{2}\/\d{2}\/\d{4})/);
+    if (etabliMatch) {
+      found.push('Établi le : ' + etabliMatch[1]);
+    }
+
+    const allFrais = [];
+    const reFrais = /entre\s+([\d\s]+)\s*€\s+et\s+([\d\s]+)\s*€/gi;
+    let m;
+    while ((m = reFrais.exec(fullText)) !== null) {
+      const min = parseInt(m[1].replace(/\s/g, ''));
+      const max = parseInt(m[2].replace(/\s/g, ''));
+      if (!isNaN(min) && !isNaN(max) && min < max) allFrais.push({min, max});
+    }
+
+    if (allFrais.length >= 2) {
+      const fraisChauf = allFrais[1];
+      document.getElementById('f62').value = fraisChauf.min;
+      document.getElementById('f63').value = fraisChauf.max;
+      found.push('Frais chauffage : ' + fraisChauf.min + '€ – ' + fraisChauf.max + '€');
+    } else if (allFrais.length === 1) {
+      document.getElementById('f62').value = allFrais[0].min;
+      document.getElementById('f63').value = allFrais[0].max;
+      found.push('Frais (total) : ' + allFrais[0].min + '€ – ' + allFrais[0].max + '€');
+    }
+
+    const anneeMatch = fullText.match(/ann[ée]es?\s+(\d{4})[,\s]+\d{4}[,\s]+\d{4}/i);
+    if (anneeMatch) {
+      document.getElementById('f64').value = anneeMatch[1];
+      document.getElementById('f22').value = anneeMatch[0].match(/\d{4}/g).join('-');
+      found.push('Années index : ' + anneeMatch[0].match(/\d{4}/g).join(', '));
+    }
+
+    document.getElementById('pdfName').textContent = file.name;
+    document.getElementById('pdfName').style.display = 'block';
+    document.getElementById('dropPdf').classList.add('loaded');
+
+    if (found.length > 0) {
+      showStatus('statusImport', 'ok', 'PDF lu (' + pdf.numPages + ' p.) — ' + found.join(' · '));
+    } else {
+      showStatus('statusImport', 'info', 'PDF chargé (' + pdf.numPages + ' pages) — aucun champ détecté automatiquement');
+    }
+
+    refreshPreview();
+    updateStats();
+    enableButtons();
+  } catch(err) {
+    showStatus('statusImport', 'err', 'Erreur lecture PDF : ' + err.message);
+    console.error(err);
+  }
+}
+
+function periodeLabel(id) {
+  const map = {'1':'Avant 1948','2':'1948-1974','3':'1975-1981','4':'1982-1989','5':'1990-2000','6':'2001-2005','7':'2006-2012','8':'Après 2012'};
+  return map[id] || id;
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const p = iso.split('-');
+  if (p.length === 3) return p[2] + '/' + p[1] + '/' + p[0];
+  return iso;
+}
+
+function buildPdfName() {
+  const ref = document.getElementById('f9').value.trim() || '';
+  if (!ref) return '';
+  const safe = ref.replace(/[\s\/\\:*?"<>|]/g, '_').replace(/[^a-zA-Z0-9_-]/g, '');
+  return safe + '.pdf';
+}
+
+function syncPdfName() {
+  const name = buildPdfName();
+  const el = document.getElementById('f61');
+  el.value = name;
+  el.style.fontStyle = name ? 'normal' : 'italic';
+}
+
+function applyXmlToForm() {
+  if (xmlData.f9) {
+    const el = document.getElementById('f9');
+    if (el) { el.value = xmlData.f9; }
+  }
+  if (xmlData.c13) {
+    const sel = document.getElementById('f10');
+    for (let o of sel.options) { if (o.value === xmlData.c13) { sel.value = xmlData.c13; break; } }
+  }
+  syncPdfName();
+}
+
+function getAllValues() {
+  const v = {};
+  COLUMNS.forEach(col => {
+    const el = document.getElementById(col.k);
+    if (el) {
+      v[col.k] = el.value || el.options?.[el.selectedIndex]?.value || '';
+    } else if (xmlData[col.k]) {
+      v[col.k] = xmlData[col.k];
+    } else {
+      v[col.k] = '';
+    }
+  });
+  return v;
+}
+
+function buildRowArray() {
+  const v = getAllValues();
+  return COLUMNS.map(col => {
+    if (col.src === 'xml' && xmlData[col.k] !== undefined) return xmlData[col.k];
+    return v[col.k] || '';
+  });
+}
+
+function refreshPreview() {
+  const nums = document.getElementById('colNums');
+  const data = document.getElementById('dataRow');
+  nums.innerHTML = '';
+  data.innerHTML = '';
+  const row = buildRowArray();
+
+  COLUMNS.forEach((col, i) => {
+    const thEl = document.createElement('td');
+    thEl.className = 'col-num';
+    thEl.textContent = col.n;
+    nums.appendChild(thEl);
+
+    const tdEl = document.createElement('td');
+    const val = row[i];
+    if (!val) {
+      tdEl.className = 'cell-empty';
+      tdEl.textContent = '—';
+    } else {
+      let cls = '';
+      if (col.src === 'xml') cls = 'cell-auto';
+      else if (col.src === 'opal') cls = 'cell-opal';
+      else cls = 'cell-man';
+      tdEl.className = cls;
+      tdEl.textContent = val;
+      tdEl.title = (col.label || 'Col.' + col.n) + ' : ' + val;
+    }
+    data.appendChild(tdEl);
+  });
+
+  const statusEl = document.getElementById('statusPrev');
+  const filled = row.filter(v => v).length;
+  statusEl.className = 'status-bar status-info';
+  statusEl.style.display = 'flex';
+  statusEl.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>' + filled + ' / ' + COLUMNS.length + ' colonnes remplies';
+}
+
+function updateStats() {
+  const row = buildRowArray();
+  const total = row.filter(v => v).length;
+  const autoCount = COLUMNS.filter((col, i) => col.src === 'xml' && row[i]).length;
+  const opalCount = COLUMNS.filter((col, i) => col.src === 'opal' && row[i]).length;
+  const pct = Math.round((total / COLUMNS.length) * 100);
+  document.getElementById('statChamps').textContent = total + '/' + COLUMNS.length;
+  document.getElementById('statAuto').textContent = autoCount;
+  document.getElementById('statOpal').textContent = COLUMNS.filter(c => c.src === 'opal').length - opalCount;
+  document.getElementById('statPret').textContent = pct + '%';
+}
+
+function enableButtons() {
+  document.getElementById('btnXlsx').disabled = false;
+  document.getElementById('btnPdfRename').disabled = false;
+}
+
+function showStatus(id, type, msg) {
+  const el = document.getElementById(id);
+  const icons = {
+    ok: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>',
+    err: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>',
+    info: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>'
+  };
+  el.className = 'status-bar status-' + type;
+  el.style.display = 'flex';
+  el.innerHTML = icons[type] + msg;
+}
+
+function exportXlsx() {
+  try {
+    const row = buildRowArray();
+    const colNums = COLUMNS.map(c => c.n);
+    
+    const wb = XLSX.utils.book_new();
+    const wsData = [row];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    const colWidths = row.map(v => ({ wch: Math.min(Math.max((v ? String(v).length : 5), 5), 50) }));
+    ws['!cols'] = colWidths;
+
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws[addr]) {
+        const col = COLUMNS[c];
+        if (!ws[addr].s) ws[addr].s = {};
+        if (col.src === 'opal') {
+          ws[addr].s.fill = { fgColor: { rgb: 'FAEEDA' } };
+        } else if (col.src === 'xml') {
+          ws[addr].s.fill = { fgColor: { rgb: 'EFF6FF' } };
+        } else {
+          ws[addr].s.fill = { fgColor: { rgb: 'E1F5EE' } };
+        }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'DPE');
+
+    const ref = document.getElementById('f9').value || xmlData.f9 || 'DPE';
+    const safe = ref.replace(/[\s\/\\:*?"<>|]/g, '_');
+    const fileName = safe + '.xlsx';
+    XLSX.writeFile(wb, fileName);
+    showStatus('statusExport', 'ok', 'Fichier Excel exporté : ' + fileName);
+  } catch(err) {
+    showStatus('statusExport', 'err', 'Erreur export Excel : ' + err.message);
+  }
+}
+
+function renamePdf() {
+  if (!pdfFileRaw) {
+    showStatus('statusExport', 'err', 'Aucun PDF chargé. Glissez d\'abord le rapport PDF.');
+    return;
+  }
+  try {
+    const newName = buildPdfName();
+    if (!newName) {
+      showStatus('statusExport', 'err', 'N° Local (Col.9) vide — renseignez-le pour nommer le PDF.');
+      return;
+    }
+    const url = URL.createObjectURL(pdfFileRaw);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = newName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    document.getElementById('f61').value = newName;
+    showStatus('statusExport', 'ok', 'PDF téléchargé : ' + newName);
+    refreshPreview();
+  } catch(err) {
+    showStatus('statusExport', 'err', 'Erreur renommage PDF : ' + err.message);
+  }
+}
+
+['dropXls', 'dropXml', 'dropPdf'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag'); });
+  el.addEventListener('dragleave', () => el.classList.remove('drag'));
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    el.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (id === 'dropXls' && (file.name.endsWith('.xls') || file.name.endsWith('.xlsx'))) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('fileXls').files = dt.files;
+      loadXls(document.getElementById('fileXls'));
+    } else if (id === 'dropXml' && file.name.endsWith('.xml')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('fileXml').files = dt.files;
+      loadXml(document.getElementById('fileXml'));
+    } else if (id === 'dropPdf' && file.name.endsWith('.pdf')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('filePdf').files = dt.files;
+      loadPdf(document.getElementById('filePdf'));
+    }
+  });
+});
+
+document.querySelectorAll('input, select').forEach(el => {
+  el.addEventListener('change', () => { refreshPreview(); updateStats(); });
+  el.addEventListener('input', () => { refreshPreview(); updateStats(); });
+});
+
+document.getElementById('f9').addEventListener('input', syncPdfName);
+document.getElementById('f9').addEventListener('change', syncPdfName);
+
+refreshPreview();
+updateStats();
+</script>
+</body>
+</html>
