@@ -738,20 +738,28 @@ function showStatus(id, type, msg) {
 function exportXlsx() {
   try {
     const row = buildRowArray();
-    const colNums = COLUMNS.map(c => c.n);
-    
+
+    // Repositionne chaque valeur à son vrai numéro de colonne Excel :
+    // col.n = 100 → index 99 (colonne CV). Les cellules 66 à 99 restent vides.
+    const fullRow = new Array(100).fill('');
+    COLUMNS.forEach((col, i) => { fullRow[col.n - 1] = row[i]; });
+
     const wb = XLSX.utils.book_new();
-    const wsData = [row];
+    const wsData = [fullRow];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    const colWidths = row.map(v => ({ wch: Math.min(Math.max((v ? String(v).length : 5), 5), 50) }));
+    const colWidths = fullRow.map(v => ({ wch: Math.min(Math.max((v ? String(v).length : 5), 5), 50) }));
     ws['!cols'] = colWidths;
+
+    // Table de correspondance numéro de colonne → définition (car les cellules 66-99 sont vides)
+    const colByNum = {};
+    COLUMNS.forEach(c => { colByNum[c.n] = c; });
 
     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
     for (let c = range.s.c; c <= range.e.c; c++) {
       const addr = XLSX.utils.encode_cell({ r: 0, c });
-      if (ws[addr]) {
-        const col = COLUMNS[c];
+      const col = colByNum[c + 1];
+      if (ws[addr] && col) {
         if (!ws[addr].s) ws[addr].s = {};
         if (col.src === 'opal') {
           ws[addr].s.fill = { fgColor: { rgb: 'FAEEDA' } };
