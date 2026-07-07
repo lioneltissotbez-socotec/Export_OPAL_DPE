@@ -201,11 +201,11 @@
           <input type="text" id="f64" placeholder="Ex: 2023" value="2023">
         </div>
         <div class="field">
-          <label>Col.62 — Frais chauf. min (€)</label>
+          <label>Col.62 — Coût annuel estimé min (€)</label>
           <input type="number" id="f62" placeholder="Ex: 320">
         </div>
         <div class="field">
-          <label>Col.63 — Frais chauf. max (€)</label>
+          <label>Col.63 — Coût annuel estimé max (€)</label>
           <input type="number" id="f63" placeholder="Ex: 450">
         </div>
         <div class="field">
@@ -381,10 +381,10 @@ const COLUMNS = [
   {n:59,k:'c59',src:'xml',label:'Recomm. 6'},
   {n:60,k:'c60',src:'xml',label:'Recomm. 7'},
   {n:61,k:'f61',src:'manual',label:'Nom PDF'},
-  {n:62,k:'f62',src:'manual',label:'Frais chauf. min'},
-  {n:63,k:'f63',src:'manual',label:'Frais chauf. max'},
+  {n:62,k:'f62',src:'manual',label:'Coût annuel min'},
+  {n:63,k:'f63',src:'manual',label:'Coût annuel max'},
   {n:64,k:'f64',src:'manual',label:'Année référence'},
-  {n:65,k:'c65',src:'xml',label:'EF annuelle'},
+  {n:65,k:'c65',src:'xml',label:'Conso EF /m²'},
   {n:100,k:'f100',src:'opal'},
 ];
 
@@ -497,7 +497,7 @@ function loadXml(input) {
         c55: travaux[2] || '', c56: '',
         c57: travaux[3] || '', c58: travaux[4] || '',
         c59: travaux[5] || '', c60: travaux[6] || '',
-        c65: roundNum(consoEF),
+        c65: conso_m2,
       };
 
       const pdfName = ref.replace(/\s/g, '_').replace(/[^a-zA-Z0-9_-]/g, '') + '.pdf';
@@ -571,15 +571,11 @@ async function loadPdf(input) {
       if (!isNaN(min) && !isNaN(max) && min < max) allFrais.push({min, max});
     }
 
-    if (allFrais.length >= 2) {
-      const fraisChauf = allFrais[1];
-      document.getElementById('f62').value = fraisChauf.min;
-      document.getElementById('f63').value = fraisChauf.max;
-      found.push('Frais chauffage : ' + fraisChauf.min + '€ – ' + fraisChauf.max + '€');
-    } else if (allFrais.length === 1) {
+    if (allFrais.length >= 1) {
+      // 1re fourchette du rapport = estimation du coût annuel total (page de garde du DPE)
       document.getElementById('f62').value = allFrais[0].min;
       document.getElementById('f63').value = allFrais[0].max;
-      found.push('Frais (total) : ' + allFrais[0].min + '€ – ' + allFrais[0].max + '€');
+      found.push('Coût annuel estimé : ' + allFrais[0].min + '€ – ' + allFrais[0].max + '€');
     }
 
     const anneeMatch = fullText.match(/ann[ée]es?\s+(\d{4})[,\s]+\d{4}[,\s]+\d{4}/i);
